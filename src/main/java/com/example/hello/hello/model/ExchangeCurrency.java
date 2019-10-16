@@ -3,14 +3,13 @@ package com.example.hello.hello.model;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 
-public class CurrencyModel implements Tradeable {
+public class ExchangeCurrency extends Currency{
     private String code;
-    private String name;
     private BigDecimal value;
 
-    public CurrencyModel(String code, String name, BigDecimal value) {
+    public ExchangeCurrency(String code, String name, BigDecimal value) {
         this.code = code;
-        this.name = name;
+        super.setName(name);
         this.value = value;
     }
 
@@ -22,14 +21,6 @@ public class CurrencyModel implements Tradeable {
         this.code = code;
     }
 
-    public String getName() {
-        return this.name;
-    }
-
-    public void setName(String name) {
-        this.name = name;
-    }
-
     public BigDecimal getValue() {
         return this.value;
     }
@@ -39,11 +30,16 @@ public class CurrencyModel implements Tradeable {
     }
 
     @Override
-    public String exhange(CurrencyModel toCurrency, BigDecimal amount) {
+    public String exhange(ExchangeCurrency toCurrency, BigDecimal amount) {
         BigDecimal baseRate = new BigDecimal(1);
         BigDecimal temp1 = baseRate.multiply(this.getValue());
         BigDecimal temp2 = temp1.divide(toCurrency.getValue(), 20, RoundingMode.HALF_UP);
         return temp2.multiply(amount).setScale(5, RoundingMode.HALF_UP).toString();
+    }
+
+    @Override
+    public BigDecimal exchangeRate() {
+        return getValue();
     }
 
 }
