@@ -7,6 +7,7 @@ import java.io.IOException;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.nio.file.Files;
+import java.text.DecimalFormat;
 import java.util.ArrayList;
 import java.util.Currency;
 import java.util.HashMap;
@@ -16,6 +17,7 @@ import java.util.Map;
 import javax.servlet.http.HttpServletResponse;
 
 import com.example.hello.hello.model.*;
+import com.example.hello.hello.model.base.BaseResponse;
 import com.example.hello.hello.model.base.ExceptionResponse;
 
 import org.springframework.beans.factory.annotation.Autowired;
@@ -45,15 +47,16 @@ public class DemoApplication implements ErrorController {
 
 	@GetMapping(value = "/hello")
 	public ResponseEntity<List<ExchangeCurrency>> getMethodName() {
-		List<ExchangeCurrency> currencyList = new ArrayList<ExchangeCurrency>();
+		// List<ExchangeCurrency> currencyList = new ArrayList<ExchangeCurrency>();
+		this.setup();
+		// ExchangeCurrency currency = new ExchangeCurrency("MYR", "Malaysia Ringgit",
+		// new BigDecimal(0.238582));
+		// currency.setCode("SGD");
+		// currency.setName("Singapore Dollar");
 
-		ExchangeCurrency currency = new ExchangeCurrency("MYR", "Malaysia Ringgit", new BigDecimal(0.238582));
-		currency.setCode("SGD");
-		currency.setName("Singapore Dollar");
+		// currencyList.add(currency);
 
-		currencyList.add(currency);
-
-		return ResponseEntity.ok().body(currencyList);
+		return ResponseEntity.ok().body(tradeList);
 	}
 
 	@RequestMapping(value = "/exchange", method = RequestMethod.GET)
@@ -95,41 +98,7 @@ public class DemoApplication implements ErrorController {
 	}
 
 	@RequestMapping(value = "/exchangeRate", method = RequestMethod.GET)
-	public ResponseEntity<String> exchange(@RequestParam("currencyCode") String currencyCode) {
-
-		this.setup();
-
-		try {
-			String tCurrencyCode = Currency.getInstance(currencyCode.toUpperCase()).getCurrencyCode();
-
-			ExchangeCurrency getRateCurrency = null;
-
-			for (ExchangeCurrency currencyModel : tradeList) {
-				if (currencyModel.getCode().equalsIgnoreCase(tCurrencyCode)) {
-					getRateCurrency = currencyModel;
-				}
-			}
-
-			if (getRateCurrency != null) {
-				return ResponseEntity.ok()
-						.body(getRateCurrency.getValue().setScale(5, RoundingMode.HALF_UP).toString());
-			}
-
-		} catch (IllegalArgumentException illegalArgumentException) {
-
-			return new ResponseEntity<>("Invalid currency Code", HttpStatus.BAD_REQUEST);
-		} catch (NullPointerException nullPointerException) {
-			return new ResponseEntity<>("invalid operation", HttpStatus.BAD_REQUEST);
-		} catch (Exception e) {
-			return new ResponseEntity<>(e.toString(), HttpStatus.BAD_REQUEST);
-		}
-
-		return new ResponseEntity<>("Rate not set for this currency", HttpStatus.OK);
-	}
-
-	@RequestMapping(value = "/exchange/confirm", method = RequestMethod.GET)
-	public ResponseEntity<String> confirmExhange(@RequestParam("from") String from, @RequestParam("to") String to,
-			@RequestParam("amount") BigDecimal amount) {
+	public ResponseEntity<String> exchange(@RequestParam("from") String from, @RequestParam("to") String to) {
 
 		this.setup();
 
@@ -151,11 +120,11 @@ public class DemoApplication implements ErrorController {
 			}
 
 			if (fCurrencyModel != null && tCurrencyModel != null) {
-				storeInDatabase(fCurrencyModel, tCurrencyModel, amount);
-				return new ResponseEntity<>("Successfully Write", HttpStatus.OK);
+				return new ResponseEntity<>(fCurrencyModel.exhange(tCurrencyModel, new BigDecimal(1)), HttpStatus.OK);
 			}
 
 		} catch (IllegalArgumentException illegalArgumentException) {
+
 			return new ResponseEntity<>("Invalid currency Code", HttpStatus.BAD_REQUEST);
 		} catch (NullPointerException nullPointerException) {
 			return new ResponseEntity<>("invalid operation", HttpStatus.BAD_REQUEST);
@@ -166,33 +135,84 @@ public class DemoApplication implements ErrorController {
 		return new ResponseEntity<>("Rate not set for this currency", HttpStatus.OK);
 	}
 
-	public void setup() {
+	@RequestMapping(value = "/exchange/confirm", method = RequestMethod.GET)
+	public ResponseEntity<BaseResponse> confirmExhange(@RequestParam("from") String from, @RequestParam("to") String to,
+			@RequestParam("amount") BigDecimal amount) {
 
-		ExchangeCurrency usd = new ExchangeCurrency("USD", "US Dollar", new BigDecimal(1.0000));
-		ExchangeCurrency sgd = new ExchangeCurrency("SGD", "Singapore Dollar", new BigDecimal(0.729485));
-		ExchangeCurrency myr = new ExchangeCurrency("MYR", "Malaysian Ringgit", new BigDecimal(0.238655));
-		ExchangeCurrency idr = new ExchangeCurrency("IDR", "Indonesian Rupiah", new BigDecimal(0.0000706001));
-		ExchangeCurrency eur = new ExchangeCurrency("EUR", "Euro", new BigDecimal(1.10180));
+		BaseResponse response = new BaseResponse();
+		this.setup();
 
-		tradeList.add(usd);
-		tradeList.add(sgd);
-		tradeList.add(myr);
-		tradeList.add(idr);
-		tradeList.add(eur);
+		try {
+			String fromCurrencyCode = Currency.getInstance(from.toUpperCase()).getCurrencyCode();
+			String toCurrency = Currency.getInstance(to.toUpperCase()).getCurrencyCode();
+
+			ExchangeCurrency fCurrencyModel = null;
+			ExchangeCurrency tCurrencyModel = null;
+
+			for (ExchangeCurrency currencyModel : tradeList) {
+				if (currencyModel.getCode().equalsIgnoreCase(fromCurrencyCode)) {
+					fCurrencyModel = currencyModel;
+				}
+
+				if (currencyModel.getCode().equalsIgnoreCase(toCurrency)) {
+					tCurrencyModel = currencyModel;
+				}
+			}
+
+			if (fCurrencyModel != null && tCurrencyModel != null) {
+				storeInDatabase(fCurrencyModel, tCurrencyModel, amount);
+
+				response.setErrorCode(0);
+				response.setErrorMessage("Success");
+				return new ResponseEntity<>(response, HttpStatus.OK);
+			}
+
+		} catch (IllegalArgumentException illegalArgumentException) {
+			response.setErrorCode(9999);
+			response.setErrorMessage("Invalid currency Code");
+
+			return new ResponseEntity<>(response, HttpStatus.BAD_REQUEST);
+		} catch (NullPointerException nullPointerException) {
+			response.setErrorCode(9999);
+			response.setErrorMessage("Invalid operation");
+			return new ResponseEntity<>(response, HttpStatus.BAD_REQUEST);
+		} catch (Exception e) {
+			response.setErrorCode(9999);
+			response.setErrorMessage(e.toString());
+			return new ResponseEntity<>(response, HttpStatus.BAD_REQUEST);
+		}
+		response.setErrorCode(9999);
+		response.setErrorMessage("Rate not set for this currency");
+		return new ResponseEntity<>(response, HttpStatus.OK);
 	}
 
-	public void storeInDatabase(ExchangeCurrency fromCurrency, ExchangeCurrency toCurrency, BigDecimal amount) throws IOException {
-		File file = ResourceUtils.getFile("classpath:result.txt");
+	public void setup() {
+
+		if (tradeList.size() == 0) {
+			ExchangeCurrency usd = new ExchangeCurrency("USD", "US Dollar", new BigDecimal(1.0000));
+			ExchangeCurrency sgd = new ExchangeCurrency("SGD", "Singapore Dollar", new BigDecimal(0.729485));
+			ExchangeCurrency myr = new ExchangeCurrency("MYR", "Malaysian Ringgit", new BigDecimal(0.238655));
+			ExchangeCurrency idr = new ExchangeCurrency("IDR", "Indonesian Rupiah", new BigDecimal(0.0000706001));
+			ExchangeCurrency eur = new ExchangeCurrency("EUR", "Euro", new BigDecimal(1.10180));
+
+			tradeList.add(usd);
+			tradeList.add(sgd);
+			tradeList.add(myr);
+			tradeList.add(idr);
+			tradeList.add(eur);
+		}
+	}
+
+	public void storeInDatabase(ExchangeCurrency fromCurrency, ExchangeCurrency toCurrency, BigDecimal amount)
+			throws IOException {
+		File file = ResourceUtils.getFile("classpath:result.csv");
 
 		FileWriter fr = new FileWriter(file, true);
-		// FileWriter fr = new FileWriter(file, true);
-BufferedWriter br = new BufferedWriter(fr);
-// br.write("data");
+		BufferedWriter br = new BufferedWriter(fr);
 
-// br.close();
-// fr.close();
-
-		br.write(fromCurrency.getCode() + "," + toCurrency.getCode() + "," + amount.toString() + "," + fromCurrency.exhange(toCurrency, amount));
+		br.append("\n");
+		br.append(fromCurrency.getCode() + "," + toCurrency.getCode() + "," + amount.toString() + ","
+				+ fromCurrency.exhange(toCurrency, new BigDecimal(1)) + "," + fromCurrency.exhange(toCurrency, amount));
 		br.close();
 		fr.close();
 
